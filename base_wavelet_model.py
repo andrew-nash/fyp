@@ -507,7 +507,8 @@ class Experiment:
             H=model.fit(self.batcher(signal_fold, annot_fold, epochs, target_batch_size=batch_size,  input_width=4096), \
                         epochs=epochs, steps_per_epoch=steps,verbose=0,callbacks=[tbcb],\
                          validation_data = val_data)    
-            history[fold] = {'model':model, 'hist':H}
+            history[fold] = {'hist':H.history}
+            model.save(f"./Tensorboard/{name}/models/{foldpadded}-model")
             history["fold_split"] = folds_idxs
         
 
@@ -527,19 +528,19 @@ class Experiment:
          
         ax = fig.add_subplot(421)
         for i in range(self.hist['K']):
-            ax.plot(self.hist[i]['hist'].history['loss'])
+            ax.plot(self.hist[i]['hist']['loss'])
             ax.title.set_text('Training Loss')
             ax.set_xlabel("Epoch")
             ax.xaxis.set_label_coords(0.5,0.075)
         ax = fig.add_subplot(423, sharex=ax)    
         for i in range(self.hist['K']):
-            ax.plot(self.hist[i]['hist'].history['val_loss'])
+            ax.plot(self.hist[i]['hist']['val_loss'])
             ax.title.set_text('Validation Loss')
             ax.set_xlabel("Epoch")
             ax.xaxis.set_label_coords(0.5,-0.1)
             
         ax = fig.add_subplot(322)   
-        ax.boxplot([[self.hist[i]['hist'].history['loss'][-1] for i in range(self.hist['K'])],[self.hist[i]['hist'].history['val_loss'][-1] for i in range(self.hist['K'])]])
+        ax.boxplot([[self.hist[i]['hist']['loss'][-1] for i in range(self.hist['K'])],[self.hist[i]['hist']['val_loss'][-1] for i in range(self.hist['K'])]])
         ax.set_xticklabels(["Train", "Val"])
         ax.set_ylabel("Loss")
 
@@ -550,7 +551,8 @@ class Experiment:
         internalSigI =  np.random.randint(0, len(self.signals[sigI])-4097)
         testS = np.array(self.signals[sigI][internalSigI:internalSigI+4096])
 
-        mod = self.hist[i]['model']
+        foldpadded = '0'*(3-len(str(i)))+str(i)
+        mod = keras.models.load_model( f"./Tensorboard/{exp_name}/models/{foldpadded}-model")
         trainable_w      = count_params(mod.trainable_weights)
         untrainable_w    = count_params(mod.non_trainable_weights)
         fig.suptitle(f"{exp_name}: {trainable_w} trainable, {untrainable_w} non-trainable parameters", fontsize=20)

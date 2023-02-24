@@ -15,10 +15,11 @@ class HypothesisTest:
                 self.config_dict = pickle.load(f)
             with open(f"./Tensorboard/{exp_name}/hist.dict.pickle", 'rb') as f:
                 self.hist = pickle.load(f)
-        except:
+        except Exception as e:
+            print(e)
             raise ValueError("ERROR: couldn't load expermiment "+f"./Tensorboard/{exp_name}/, make sure you have specified the experimnet name correctly and that the pickle files exist")
-        self.final_val_losses   = [self.hist[i]['hist'].history['val_loss'][-1] for i in self.hist.keys()]
-        self.final_train_losses = [self.hist[i]['hist'].history['loss'][-1] for i in self.hist.keys()]
+        self.final_val_losses   = [self.hist[i]['hist']['val_loss'][-1] for i in range(self.hist['K'])]
+        self.final_train_losses = [self.hist[i]['hist']['loss'][-1] for i in range(self.hist['K'])]
     def get_val_loss(self):
         return self.final_val_losses 
     def get_train_loss(self):
@@ -51,6 +52,18 @@ class HypothesisTest:
         
         return scipy.stats.mannwhitneyu(self.get_val_loss(), secondExp.get_val_loss(), alternative="less")
 
+    def test_val_mean_greater(self, secondExp):
+        '''
+        H0: the mean validation loss for this experiment is the same
+        as that of secondExp
+        HA: the mean loss for this experiment is higher
+        '''
+
+        if isinstance(secondExp, str):
+            secondExp = HypothesisTest(secondExp)
+        
+        return scipy.stats.mannwhitneyu(self.get_val_loss(), secondExp.get_val_loss(), alternative="greater")
+
     def test_less_overfitting(self, secondExp):
         '''
         H0: The mean difference between train and validation loss is the same
@@ -61,3 +74,14 @@ class HypothesisTest:
             secondExp = HypothesisTest(secondExp)
         
         return scipy.stats.mannwhitneyu(self.get_overfitted_pair_loss(), secondExp.get_overfitted_pair_loss(), alternative="less")
+    
+    def test_more_overfitting(self, secondExp):
+        '''
+        H0: The mean difference between train and validation loss is the same
+        HA: The mean difference between train and validation loss is lower for this experiment
+        '''
+
+        if isinstance(secondExp, str):
+            secondExp = HypothesisTest(secondExp)
+        
+        return scipy.stats.mannwhitneyu(self.get_overfitted_pair_loss(), secondExp.get_overfitted_pair_loss(), alternative="greater")
