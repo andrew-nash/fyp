@@ -170,7 +170,12 @@ class Experiment:
         if model==None:
             inputs, outputs = self.wavelet_cnn(config_dict)
             model = keras.models.Model(inputs, outputs)
-        
+        elif isinstance(model, str):
+            if model == "RESIDUAL":
+                i,o = self.residualCNN(config_dict)
+                model = keras.models.Model(i,o)
+            else:
+                raise ValueError("UNKNOWN MODEL '"+model+"'")
         K = config_dict.get("K")
         if K==None: K=1
         
@@ -201,6 +206,70 @@ class Experiment:
         with open(f"./Tensorboard/{name}/hist.dict.pickle", 'wb') as f:
             pickle.dump(self.hist, f)
         self.present_results(name, True, f"./Tensorboard/{name}")
+    
+    def residualCNN(self, config_dict):
+        '''
+        width:
+        n_feature_maps
+        levels: number of blocks
+        input_layer
+        convOnResidualConnect: true/false - do we convolve on the residual connection
+        initKernels: kernel sizes across the block, of length 3 or 4
+        '''
+        n_feature_maps = config_dict.get("n_feature_maps")
+        if n_feature_maps==None: n_feature_maps=1
+
+        width = config_dict.get('width')
+        if width==None:
+            width=4096
+        nb_classes=width
+        
+        input_layer = config_dict.get("input_layer")
+        if input_layer==None:
+            input_layer = keras.layers.Input(shape=(4096,), name='input_Raw')
+
+
+        blocks = config_dict.get('levels')
+        if blocks==None: blocks=4
+
+        convOnResidualConnect = config_dict.get('convOnResidualConnect')
+        if convOnResidualConnect==None:
+            convOnResidualConnect=False
+            
+        initKernels = config_dict.get("initKernels")
+        if initKernels==None:
+            initKernels = [8,5,3]
+        elif not convOnResidualConnect and len(initKernels)!=3:
+            raise ValueError("Specify 3 inital kernel sizes per block operation")
+        elif convOnResidualConnect and len(initKernels)!=4:
+            raise ValueError("Specify 4 inital kernel sizes per block operation (incl one for the residual connection)")
+        
+        inputLayer = tf.keras.layers.Reshape((width,1,1))(input_layer)
+        y =  inputLayer
+
+        for block in range(blocks):
+            x1 = y
+            conv_x = keras.layers.Conv2D(n_feature_maps, initKernels[0], 1, padding='same')(x1)
+            conv_x = keras.layers.Activation('relu')(conv_x)
+            
+            conv_y = keras.layers.Conv2D(n_feature_maps, initKernels[1], 1, padding='same')(conv_x)
+            conv_y = keras.layers.Activation('relu')(conv_y)
+            
+            conv_z = keras.layers.Conv2D(n_feature_maps, initKernels[2], 1, padding='same')(conv_y)
+            #conv_z = keras.layers.BatchNormalization()(conv_z)
+            
+            if convOnResidualConnect:
+                shortcut_y = keras.layers.Conv2D(initKernels[3], 1, 1,padding='same')(x1)
+            else:
+                shortcut_y = x1
+            y = keras.layers.Add()([shortcut_y, conv_z])
+            y = keras.layers.Activation('relu')(y)
+       
+        full = keras.layers.GlobalAveragePooling2D()(y)
+        out = keras.layers.Dense(nb_classes,activation='softmax')(full)
+        reconstructed = tf.keras.layers.Reshape((width,),name='reconstructed')(out)
+        return input_layer, reconstructed
+
 
     def wavelet_cnn(self, config_dict):
         '''
@@ -506,7 +575,7 @@ class Experiment:
             steps=self.calculae_steps(signal_fold, annot_fold, epochs, target_batch_size=batch_size, input_width=4096)
             H=model.fit(self.batcher(signal_fold, annot_fold, epochs, target_batch_size=batch_size,  input_width=4096), \
                         epochs=epochs, steps_per_epoch=steps,verbose=0,callbacks=[tbcb],\
-                         validation_data = val_data)    
+                         validation_data = val_data)   
             history[fold] = {'hist':H.history}
             model.save(f"./Tensorboard/{name}/models/{foldpadded}-model")
             history["fold_split"] = folds_idxs
