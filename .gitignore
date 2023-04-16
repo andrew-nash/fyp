@@ -2,3 +2,4 @@ __pycache__/
 Tensorboard/
 base_wavelet_model_old.py
 test.ipynb
+scratch/

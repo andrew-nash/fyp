@@ -3,6 +3,7 @@ import numpy as np
 import tensorflow.keras as keras
 import matplotlib.pyplot as plt
 import json, pickle
+from novel_activations import *
 from keras.utils.layer_utils import count_params
 
 class HardCodableCNN(tf.keras.layers.Layer):
@@ -35,7 +36,7 @@ class HardCodableCNN(tf.keras.layers.Layer):
         if self.enforce_reverse_alternate>0:    
             ra_kernel = tf.math.multiply(ra_kernel,self.qmfFlip)
         return tf.nn.conv2d(input_data, ra_kernel, padding=self.padding, strides=self.stride,dilations=self.dilations)
-    
+      
     def get_config(self):
         config = super().get_config()
         config.update({
@@ -174,6 +175,12 @@ class Experiment:
             if model == "RESIDUAL":
                 i,o = self.residualCNN(config_dict)
                 model = keras.models.Model(i,o)
+            elif model == "STANFORD":
+                i,o = self.StanfordResidualCNN(config_dict)
+                model = keras.models.Model(i,o)
+            elif model == "WAVELET_RESID":
+                i,o = self.WaveletResidualCNN(config_dict)
+                model = keras.models.Model(i,o)
             else:
                 raise ValueError("UNKNOWN MODEL '"+model+"'")
         K = config_dict.get("K")
@@ -206,7 +213,118 @@ class Experiment:
         with open(f"./Tensorboard/{name}/hist.dict.pickle", 'wb') as f:
             pickle.dump(self.hist, f)
         self.present_results(name, True, f"./Tensorboard/{name}")
+
+    def WaveletResidualCNN(self, config_dict):
+        '''
+        use 5 or 8 blocks
+        with a pooling of 10 or 2
+        '''
+
+        
+        input_layer = config_dict.get("input_layer")
+        if input_layer==None:
+            input_layer = keras.layers.Input(shape=(4096,), name='input_Raw')
+
+        kernels = config_dict.get("kernels")
+        if kernels==None:
+            kernels = 8
+
+        blocks = config_dict.get('blocks')
+        if blocks==None: blocks=5
+        if blocks not in [1,2,3,4,5,6,8]:
+           raise ValueError("Pick 1,2,3,4,5,6 or 8 blocks, things get messy otherwise")
+        
+        activationLayer = config_dict.get("activationLayer")
+        activationLayerParams = config_dict.get("activationLayerParams")
+
+        inputLayer = keras.layers.Reshape((4096,1))(input_layer)
+        x1 = tf.keras.layers.Normalization()(inputLayer)
+
+        '''
+        y =  keras.layers.Conv1D(64, 16, strides=1, padding="same")(inputLayer)
+        y = keras.layers.BatchNormalization()(y)
+        x1 = TripleLinearAct(None, True, 0.05)(y)'''
+
+        coeffs = []
+        for block in range(blocks):
+            conv_x = keras.layers.Conv1D(kernels*(block+1), 16, strides=1, dilation_rate=2, padding='same')(x1)
+            bncx = keras.layers.BatchNormalization()(conv_x)
+            relu_x = activationLayer(*activationLayerParams)(bncx)
+            coeffs.append(relu_x)
+            x1 = keras.layers.Dropout(0.2)(relu_x)
+
+
+        for block in range(blocks):
+            bncx = keras.layers.BatchNormalization()(x1)
+            recon = keras.layers.Conv1D(1, 16, strides=1, padding='same')(coeffs[-(block+1)])
+            recon = keras.layers.BatchNormalization()(recon)
+            recon = activationLayer(*activationLayerParams)(recon)
+            x1 = keras.layers.Add()([bncx, recon])
+            x1 = keras.layers.Conv1DTranspose(kernels*(block+1), 16, strides=1, dilation_rate=2, padding='same')(x1)
+            
+
+        x1 = keras.layers.Conv1D(1, 16, strides=1, padding='same')(x1)
+        y = activationLayer(*activationLayerParams)(x1)
+        y = keras.layers.Flatten()(y)
+
+        out = keras.layers.Activation(keras.activations.sigmoid)(y)
+        reconstructed = keras.layers.Reshape((4096,),name='reconstructed')(out)
+        
+        return input_layer, reconstructed
     
+
+    def StanfordResidualCNN(self, config_dict):
+        '''
+        use 5 or 8 blocks
+        with a pooling of 10 or 2
+        '''
+
+        
+        input_layer = config_dict.get("input_layer")
+        if input_layer==None:
+            input_layer = keras.layers.Input(shape=(4096,), name='input_Raw')
+
+
+        blocks = config_dict.get('blocks')
+        if blocks==None: blocks=5
+        if blocks not in [1,2,3,4,5,6,8]:
+           raise ValueError("Pick 1,2,3,4,5,6 or 8 blocks, things get messy otherwise")
+        
+
+        inputLayer = keras.layers.Reshape((4096,1))(input_layer)
+        inputLayer = tf.keras.layers.Normalization()(inputLayer)
+
+
+        y =  keras.layers.Conv1D(64, 16, strides=1, padding="same")(inputLayer)
+        y = keras.layers.BatchNormalization()(y)
+        y = keras.layers.Activation(keras.activations.relu)(y)
+        
+        for block in range(blocks):
+            print(block)
+            x1 = y
+            conv_x = keras.layers.Conv1D(64*(block+1), 16, strides=1, padding='same')(x1)
+            bncx = keras.layers.BatchNormalization()(conv_x)
+            relu_x = keras.layers.Activation(keras.activations.relu)(bncx)
+            dp = keras.layers.Dropout(0.2)(relu_x)
+            conv2 = keras.layers.Conv1D(64*(block+1), 16, strides=2, padding='same')(dp)
+            x1 = keras.layers.MaxPooling1D(2, padding="same")(x1)
+            x1 = keras.layers.Conv1D(64*(block+1), 16, strides=1, padding='same')(x1)
+            y=keras.layers.Add()([x1, conv2])
+        
+        y =  keras.layers.BatchNormalization()(y)
+        y = keras.layers.Activation(keras.activations.relu)(y)
+        y = keras.layers.Flatten()(y)
+        #return input_layer, y
+        rsShape = [None,131072,131072,98304,65536,40960,24576 ,None ,8192]
+        
+        y = keras.layers.Reshape((rsShape[blocks],1))(y)
+        y = keras.layers.AveragePooling1D(int(rsShape[blocks]/4096), padding="same")(y)
+        
+        out = keras.layers.Activation(keras.activations.sigmoid)(y)
+        reconstructed = keras.layers.Reshape((4096,),name='reconstructed')(out)
+        
+        return input_layer, reconstructed
+
     def residualCNN(self, config_dict):
         '''
         width:
@@ -245,29 +363,50 @@ class Experiment:
             raise ValueError("Specify 4 inital kernel sizes per block operation (incl one for the residual connection)")
         
         inputLayer = tf.keras.layers.Reshape((width,1,1))(input_layer)
+
+        inpBN = config_dict.get("inputBatchNorm")
+        if inpBN:
+            inputLayer = tf.keras.layers.Normalization()(inputLayer)
+
         y =  inputLayer
 
+        activationLayer = config_dict.get("activationLayer")
+        activationLayerParams = config_dict.get("activationLayerParams")
+
+        
         for block in range(blocks):
             x1 = y
             conv_x = keras.layers.Conv2D(n_feature_maps, initKernels[0], 1, padding='same')(x1)
-            conv_x = keras.layers.Activation('relu')(conv_x)
+            #conv_x = keras.layers.Activation('relu')(conv_x)
+
+            if activationLayer!=None:
+                conv_x = activationLayer(*activationLayerParams)(conv_x)
             
             conv_y = keras.layers.Conv2D(n_feature_maps, initKernels[1], 1, padding='same')(conv_x)
-            conv_y = keras.layers.Activation('relu')(conv_y)
+            #conv_y = keras.layers.Activation('relu')(conv_y)
+            if activationLayer!=None:
+                conv_y = activationLayer(*activationLayerParams)(conv_y)
             
             conv_z = keras.layers.Conv2D(n_feature_maps, initKernels[2], 1, padding='same')(conv_y)
-            #conv_z = keras.layers.BatchNormalization()(conv_z)
+            conv_z = keras.layers.BatchNormalization()(conv_z)
             
             if convOnResidualConnect:
                 shortcut_y = keras.layers.Conv2D(initKernels[3], 1, 1,padding='same')(x1)
             else:
                 shortcut_y = x1
             y = keras.layers.Add()([shortcut_y, conv_z])
-            y = keras.layers.Activation('relu')(y)
+            #y = keras.layers.Activation('relu')(y)
+            if activationLayer!=None:
+                y = activationLayer(*activationLayerParams)(y)
        
         full = keras.layers.GlobalAveragePooling2D()(y)
-        out = keras.layers.Dense(nb_classes,activation='softmax')(full)
+        useSigmoidOnOutput = config_dict.get("useSigmoidOnOutput")
+        if useSigmoidOnOutput:
+            out = keras.layers.Dense(width,activation='sigmoid')(full)
+        else:
+            out = keras.layers.Dense(width,activation=None)(full)
         reconstructed = tf.keras.layers.Reshape((width,),name='reconstructed')(out)
+
         return input_layer, reconstructed
 
 
@@ -308,6 +447,10 @@ class Experiment:
             input_layer = keras.layers.Input(shape=(4096,), name='input_Raw')
 
         inputLayer = tf.keras.layers.Reshape((width,1,1))(input_layer)
+
+        inpBN = config_dict.get("inputBatchNorm")
+        if inpBN:
+            inputLayer = tf.keras.layers.BatchNormalization()(inputLayer)
 
         levels = config_dict.get("levels")
         if levels==None:
@@ -451,7 +594,13 @@ class Experiment:
 
                 last_step = keras.layers.Add()([last_step, h])
 
-        reconstructed = tf.keras.layers.Reshape((width,),name='reconstructed')(last_step)
+        
+        useSigmoidOnOutput = config_dict.get("useSigmoidOnOutput")
+        if useSigmoidOnOutput:
+            reconstructed = tf.keras.layers.Reshape((width,))(last_step)
+            reconstructed = tf.keras.layers.Activation(activation='sigmoid',name='reconstructed')(reconstructed)
+        else:
+            reconstructed = tf.keras.layers.Reshape((width,),name='reconstructed')(last_step)
         
         return (input_layer, wavelet_coefficients+[reconstructed])
 
@@ -551,7 +700,7 @@ class Experiment:
             print("=====================")
             print("===== Fold "+foldpadded+' ======')
             print("=====================")
-            chosen_idxs = np.where(folds_idxs==fold)
+            chosen_idxs = np.where(folds_idxs!=fold)
             signal_fold = signals[chosen_idxs]
             annot_fold = annots[chosen_idxs]
             model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-5),\
@@ -565,7 +714,7 @@ class Experiment:
                 #print(signals[chosen_idxs].shape)
                 #print(signals[np.where(folds_idxs!=fold)].shape)
                 
-                xval, yval = zip(*list(self.val_batcher(signals[np.where(folds_idxs!=fold)], annots[np.where(folds_idxs!=fold)], epochs, 4096)))
+                xval, yval = zip(*list(self.val_batcher(signals[np.where(folds_idxs==fold)], annots[np.where(folds_idxs==fold)], epochs, 4096)))
                 val_data = (np.array(xval), np.array(yval))
             else:
                 val_data=None

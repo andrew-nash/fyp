@@ -20,6 +20,13 @@ class HypothesisTest:
             raise ValueError("ERROR: couldn't load expermiment "+f"./Tensorboard/{exp_name}/, make sure you have specified the experimnet name correctly and that the pickle files exist")
         self.final_val_losses   = [self.hist[i]['hist']['val_loss'][-1] for i in range(self.hist['K'])]
         self.final_train_losses = [self.hist[i]['hist']['loss'][-1] for i in range(self.hist['K'])]
+    
+    def combine(self, secondExp):
+        if isinstance(secondExp, str):
+            secondExp = HypothesisTest(secondExp)
+        self.final_val_losses+=secondExp.get_val_loss()
+        self.final_train_losses+=secondExp.get_train_loss()
+
     def get_val_loss(self):
         return self.final_val_losses 
     def get_train_loss(self):
@@ -29,7 +36,7 @@ class HypothesisTest:
         return [t-v for t, v in zip(self.final_train_losses,self.final_val_losses)]
     
 
-    def test_val_means_equal(self, secondExp):
+    def test_val_mean_equal(self, secondExp):
         '''
         H0: the mean validation loss for this experiment is the same
         as that of secondExp
