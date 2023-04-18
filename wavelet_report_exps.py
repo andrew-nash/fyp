@@ -12,7 +12,6 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 batch_size = 2
 
 for blocks in [3,5]:
-    for kernels in [1,32,64]:
         for minGrad in [0.01,0.05,0.5]:
             config_dict = {
                 'exp_name': None,
@@ -34,3 +33,27 @@ for blocks in [3,5]:
                 config_dict["exp_description"] = exp_name
                 testE = base_wavelet_model.Experiment()
                 testE.execute_experiment(config_dict, model="WAVELET_RESID")
+
+for blocks in [5]:
+        for kernels in [32,64]:
+            for minGrad in [0.05]:
+                config_dict = {
+                    'exp_name': None,
+                    'exp_description': None,
+                    'batch_size': batch_size,
+                    'K': 10,
+                    'epochs': 50,
+                    'blocks': blocks,
+                    'activationLayer': novel_activations.TripleLinearAct,
+                    'activationLayerParams': [None, True, minGrad]
+                }
+
+                exp_name =  f"Large Wave Resnet {blocks} blocks TLA {minGrad} - {kernels} kernels"
+                if exp_name in os.listdir("Tensorboard") and "result_plots.png" in os.listdir("Tensorboard/"+exp_name):
+                    pass
+                else:
+                    print(exp_name)
+                    config_dict["exp_name"] = exp_name
+                    config_dict["exp_description"] = exp_name
+                    testE = base_wavelet_model.Experiment()
+                    testE.execute_experiment(config_dict, model="WAVELET_RESID")

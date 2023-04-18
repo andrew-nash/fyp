@@ -11,7 +11,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 batch_size = 2
 
-for blocks in [1,2,3,5,8]:
+for blocks in [1,2,3,5]:
     config_dict = {
         'exp_name': None,
         'exp_description': None,
