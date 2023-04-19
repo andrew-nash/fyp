@@ -43,12 +43,13 @@ for blocks in [5]:
                     'batch_size': batch_size,
                     'K': 10,
                     'epochs': 50,
+                    'kernels' : kernels,
                     'blocks': blocks,
                     'activationLayer': novel_activations.TripleLinearAct,
                     'activationLayerParams': [None, True, minGrad]
                 }
 
-                exp_name =  f"Large Wave Resnet {blocks} blocks TLA {minGrad} - {kernels} kernels"
+                exp_name =  f"Wavelet Full ResNet with {blocks} blocks TLA {minGrad} - {kernels} kernels"
                 if exp_name in os.listdir("Tensorboard") and "result_plots.png" in os.listdir("Tensorboard/"+exp_name):
                     pass
                 else:

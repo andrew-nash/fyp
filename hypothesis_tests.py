@@ -170,7 +170,7 @@ class HypothesisTest:
             self.load_r_peak_preds(self.hist['K'], 4)
         self.offr_losses = []
         for k in range(len(self.trues)):
-            true = np.array([1.0 for _ in range(len(self.trues[k]))])
+            true = np.array([0.0 for _ in range(len(self.trues[k]))])
             self.offr_losses.append(Lf(true, np.array(self.trues[k])))
         self.offr_losses = [x.numpy() for x in self.offr_losses]
         return self.offr_losses
