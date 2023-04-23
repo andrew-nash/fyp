@@ -9,3 +9,5 @@
 `report_resnet_exp.py`, `wavelet_report_exps.py` and `report_simple_wevelet_exp.py` contain the configurations for some of the experiments in our paper
 
 `empirical_experiments.py` contains the code which performed testing and evaluation on the experimental data.
+
+Some code is modified from and credited to [DeSpaWN](https://github.com/MichauGabriel/DeSpaWN)
