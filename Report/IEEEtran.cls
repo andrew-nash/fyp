@@ -2499,7 +2499,7 @@
 \def\thesubsubsection{\thesubsection.\arabic{subsubsection}}
 \def\theparagraph{\thesubsubsection.\arabic{paragraph}}
 \else
-\def\thesection{\Roman{section}}                             % I
+\def\thesection{\arabic{section}}                             % I
 % V1.7, \mbox prevents breaks around - 
 \def\thesubsection{\mbox{\thesection-\Alph{subsection}}}     % I-A
 % V1.7 use I-A1 format used by IEEE rather than I-A.1
@@ -5674,9 +5674,9 @@ between column types.}%
     \setcounter{subsubsection}{0}%
     \setcounter{paragraph}{0}%
     \ifCLASSOPTIONromanappendices%
-    \gdef\thesection{\Roman{section}}%
-    \gdef\thesectiondis{\Roman{section}}%
-    \@IEEEcompsocconfonly{\gdef\thesectiondis{\Roman{section}.}}%
+    \gdef\thesection{\arabic{section}}%
+    \gdef\thesectiondis{\arabic{section}}%
+    \@IEEEcompsocconfonly{\gdef\thesectiondis{\arabic{section}.}}%
     \gdef\@IEEEthmcounterinsection##1{A\arabic{##1}}
     \else%
     \gdef\thesection{\Alph{section}}%

@@ -8,7 +8,7 @@ from keras.utils.layer_utils import count_params
 
 
 ###
-### Code for QMF wavelet CNN's is modified from https://github.com/MichauGabriel/DeSpaWN
+### Code for QMF wavelet CNNs is modified from https://github.com/MichauGabriel/DeSpaWN
 
 class HardCodableCNN(tf.keras.layers.Layer):
     def __init__(self, stride=2, dilations=None, enforce_reverse=False, enforce_reverse_alternate=False, padding='SAME', **kwargs):
